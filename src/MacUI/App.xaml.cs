@@ -25,6 +25,7 @@ public partial class App : Application
     private static SpotlightWindow? _spotlight;
     private static SettingsWindow? _settings;
     private static StatusBarWindow? _statusBar;
+    private static ControlCenterWindow? _controlCenter;
     private static IntPtr _spotHwnd;
     private static bool _hotkeyOn;
     private static WinForms.NotifyIcon? _tray;
@@ -122,7 +123,20 @@ public partial class App : Application
         RefreshGlass();
 
         if (Cfg.StatusBarEnabled && _statusBar == null) { _statusBar = new StatusBarWindow(); }
-        else if (!Cfg.StatusBarEnabled && _statusBar != null) { _statusBar.Close(); _statusBar = null; }
+        else if (!Cfg.StatusBarEnabled && _statusBar != null) { _statusBar.Close(); _statusBar = null; _controlCenter?.SlideIn(); }
+    }
+
+    // ---------------- 控制中心 ----------------
+
+    public static void ToggleControlCenter()
+    {
+        if (_controlCenter == null)
+        {
+            _controlCenter = new ControlCenterWindow();
+            _controlCenter.Closed += (_, _) => _controlCenter = null;
+            _controlCenter.Show();
+        }
+        _controlCenter.Toggle();
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)

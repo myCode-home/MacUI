@@ -211,4 +211,7 @@ public partial class StatusBarWindow : Window
 
     private void Gear_Click(object sender, RoutedEventArgs e)
         => App.ShowSettings();
+
+    private void CcBtn_Click(object sender, RoutedEventArgs e)
+        => App.ToggleControlCenter();
 }

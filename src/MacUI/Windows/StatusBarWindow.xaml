@@ -43,6 +43,9 @@
                 <TextBlock x:Name="TimeText" Text="00:00" FontSize="12.5"
                            Foreground="{DynamicResource PrimaryTextBrush}"
                            VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <Button x:Name="CcBtn" Style="{StaticResource IconBtn}" Content="&#xE700;"
+                        FontSize="13" VerticalAlignment="Center" Click="CcBtn_Click"
+                        ToolTip="控制中心"/>
                 <Button x:Name="GearBtn" Style="{StaticResource IconBtn}" Content="&#xE713;"
                         FontSize="13" VerticalAlignment="Center" Click="Gear_Click"
                         ToolTip="设置"/>
