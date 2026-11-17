@@ -160,8 +160,9 @@ internal static class Native
     [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool attach);
     [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
 
-    // ---------- 系统音量(winmm) ----------
-    [DllImport("winmm.dll")] public static extern int WaveOutGetVolume(uint device, out uint volume);
+    // ---------- 系统音量(winmm;导出名小写开头) ----------
+    [DllImport("winmm.dll", EntryPoint = "waveOutGetVolume")]
+    public static extern int WaveOutGetVolume(uint device, out uint volume);
 
     /// <summary>前台窗口当前输入法:简体中文返回 "中",否则返回 "EN"。</summary>
     public static string GetForegroundIme()
