@@ -1,0 +1,17 @@
+# Build output
+bin/
+obj/
+publish/
+
+# IDE
+.vs/
+.idea/
+*.user
+*.suo
+
+# Local verification artifacts (screenshots, scripts)
+verify/
+
+# OS
+Thumbs.db
+.DS_Store
