@@ -72,7 +72,8 @@ public partial class StatusBarWindow : Window
         double cy = p.Y / dpi, cx = p.X / dpi;
 
         // 右上角 10% 屏宽是窗口关闭/最小化/最大化按钮的区域:
-        // 不触发状态栏呼出;若状态栏已展开且鼠标进入该区域 → 立即收回让出按钮
+        // 仅在「隐藏状态」下阻止呼出(防止贴过去盖住按钮);
+        // 已展开时鼠标只要还悬停在状态栏上,面板就一直保持显示
         double excludeFrom = SystemParameters.PrimaryScreenWidth * 0.90;
 
         if (!_shown)
@@ -81,9 +82,6 @@ public partial class StatusBarWindow : Window
             if (cy <= 4 && cx < excludeFrom) SlideDown();
             return;
         }
-
-        // 已展开时,鼠标进入右上角排除区 → 立即收回
-        if (cy <= Top + Height + 6 && cx >= excludeFrom) { SlideUp(); return; }
 
         bool inside = cy >= Top - 6 && cy <= Top + Height + 24;   // 全宽,只看纵向
         if (inside) { _retractSince = null; return; }
