@@ -159,6 +159,7 @@ internal static class Native
     [DllImport("user32.dll")] public static extern IntPtr GetKeyboardLayout(uint idThread);
     [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool attach);
     [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder sb, int max);
 
     // ---------- 系统音量(winmm;导出名小写开头) ----------
     [DllImport("winmm.dll", EntryPoint = "waveOutGetVolume")]

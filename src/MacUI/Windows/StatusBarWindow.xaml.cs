@@ -172,7 +172,7 @@ public partial class StatusBarWindow : Window
         int shown = 0;
         foreach (var app in apps)
         {
-            if (shown >= 8) break;
+            if (shown >= 14) break;
             var hIcon = Native.GetWindowIcon(app.Hwnd);
             var img = new Image
             {

@@ -17,42 +17,59 @@ public class RunningApp
 public static class RunningApps
 {
     /// <summary>
-    /// 运行中的应用列表(按 Z 序 = 最近使用序,顶在前;每个进程取最靠前的主窗口)。
-    /// 用于 Ctrl+Tab 切换器与左缘缩略条。
+    /// 运行中的应用/窗口列表(按 Z 序 = 最近使用序,顶在前),与任务视图的枚举口径一致:
+    /// - 不过滤 cloaked(Win11 25H2 的后台/最小化窗口用 cloak 隐藏,任务视图同样能看到它们)
+    /// - 普通进程按 PID 合并多窗口;ApplicationFrameHost(UWP 宿主)按窗口逐个列出
+    /// 用于 Ctrl+Tab 切换器与状态栏应用图标行。
     /// </summary>
     public static List<RunningApp> GetRunningApps(bool includeMinimized = false)
     {
         var list = new List<RunningApp>();
-        var seenPids = new HashSet<uint>();
+        var seenKeys = new HashSet<string>();
         var pidNames = new Dictionary<uint, string>();
         var selfPid = (uint)Environment.ProcessId;
         var clsBuf = new System.Text.StringBuilder(64);
+        var titleBuf = new System.Text.StringBuilder(256);
 
         Native.EnumWindows((hwnd, _) =>
         {
             if (!Native.IsWindowVisible(hwnd)) return true;
             if ((Native.GetWindowLong(hwnd, Native.GWL_EXSTYLE) & Native.WS_EX_TOOLWINDOW) != 0) return true;
-            if (Native.DwmGetWindowAttribute(hwnd, Native.DWMWA_CLOAKED, out int cloaked, 4) == 0 && cloaked != 0) return true;
             if (Native.GetWindowThreadProcessId(hwnd, out uint pid) == 0 || pid == 0) return true;
             if (pid == selfPid) return true;
             if (!includeMinimized && Native.IsIconic(hwnd)) return true;
-            if (seenPids.Contains(pid)) return true;
+
+            string name;
+            if (!pidNames.TryGetValue(pid, out var n0))
+            {
+                try { using var p = Process.GetProcessById((int)pid); n0 = p.ProcessName; }
+                catch { n0 = "?"; }
+                pidNames[pid] = n0;
+            }
+            name = n0;
 
             // 排除 explorer 外壳窗口
             clsBuf.Clear();
             Native.GetClassName(hwnd, clsBuf, 64);
             string cls = clsBuf.ToString();
             if (cls is "Progman" or "WorkerW" or "Shell_TrayWnd" or "Shell_SecondaryTrayWnd"
-                or "XamlExplorerHostIslandWindow" or "TopLevelWindowForOverflowXamlIsland") return true;
+                or "XamlExplorerHostIslandWindow" or "TopLevelWindowForOverflowXamlIsland"
+                or "Windows.UI.Core.CoreWindow") return true;
+
+            // 分组键:普通进程按 PID(合并同应用多窗口);
+            // ApplicationFrameHost(UWP 宿主)按窗口逐个列出(每个 UWP 应用一个窗口)
+            string groupKey = (name == "ApplicationFrameHost") ? ("w:" + hwnd.ToInt64().ToString("X")) : ("p:" + pid);
+            if (!seenKeys.Add(groupKey)) return true;
 
             bool iconic = Native.IsIconic(hwnd);
             try
             {
                 using var p = Process.GetProcessById((int)pid);
-                if (!pidNames.TryGetValue(pid, out var name)) { name = p.ProcessName; pidNames[pid] = name; }
-                string title = p.MainWindowTitle.Length > 0 ? p.MainWindowTitle : name;
+                titleBuf.Clear();
+                Native.GetWindowText(hwnd, titleBuf, 256);
+                string title = titleBuf.ToString();
+                if (title.Length == 0) title = p.MainWindowTitle.Length > 0 ? p.MainWindowTitle : name;
                 list.Add(new RunningApp { Hwnd = hwnd, Pid = pid, Title = title, Process = name, Minimized = iconic });
-                seenPids.Add(pid);
             }
             catch { /* 进程可能已退出 */ }
             return true;

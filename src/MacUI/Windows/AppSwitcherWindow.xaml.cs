@@ -189,7 +189,7 @@ public partial class AppSwitcherWindow : Window
             slot.Background = selected ? (Brush)FindResource("SelectedBrush") : Brushes.Transparent;
             slot.RenderTransform = selected ? new ScaleTransform(1.12, 1.12) : null;
             if (slot.Child is StackPanel sp && sp.Children.Count > 1 && sp.Children[1] is TextBlock tb)
-                tb.Text = selected ? ((RunningApp)slot.Tag).Process : "";
+                tb.Text = selected ? ((RunningApp)slot.Tag).Title : "";
         }
     }
 
