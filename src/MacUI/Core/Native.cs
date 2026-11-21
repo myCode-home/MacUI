@@ -69,6 +69,65 @@ internal static class Native
         DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref v, 4);
     }
 
+    /// <summary>去掉 Win11 窗口的 DWM 外边框(panel 只保留内层圆角)。</summary>
+    public const int DWMWA_BORDER_COLOR = 34;
+    public static void RemoveWindowBorder(IntPtr hwnd)
+    {
+        int none = unchecked((int)0xFFFFFFFE);   // DWMWA_COLOR_NONE
+        DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref none, 4);
+    }
+
+    /// <summary>
+    /// 用窗口区域把无边框窗口裁成单一圆角(物理像素)。
+    /// 毛玻璃面板必须 AllowsTransparency=False 才能保留 Acrylic,于是 XAML 的 CornerRadius
+    /// 无法裁窗形 —— 只剩 DWM 自带的 8px 圆角,看起来就是「外面还有一圈边框」。
+    /// 这里用 SetWindowRgn 裁出与内层一致的圆角,外圈彻底消失。
+    /// </summary>
+    public static void SetRoundRegion(IntPtr hwnd, int widthPx, int heightPx, int radiusPx)
+    {
+        if (widthPx <= 0 || heightPx <= 0) return;
+        int d = Math.Max(0, radiusPx) * 2;
+        // +1:CreateRoundRectRgn 的 right/bottom 是开区间,不加 1 会缺最右/最下一像素
+        IntPtr rgn = CreateRoundRectRgn(0, 0, widthPx + 1, heightPx + 1, d, d);
+        if (rgn == IntPtr.Zero) return;
+        SetWindowRgn(hwnd, rgn, true);   // 成功后区域所有权移交系统,不要再 DeleteObject
+    }
+
+    /// <summary>毛玻璃面板统一外观:Acrylic + 去掉 DWM 外框与圆角 + 按实际尺寸裁圆角。
+    /// 尺寸变化后需由调用方再调 <see cref="RefreshRegion"/>(SizeToContent 面板会变高)。</summary>
+    public static void ApplyGlassPanel(Window window, Color tint, int radiusDip)
+    {
+        var hwnd = new WindowInteropHelper(window).Handle;
+        if (hwnd == IntPtr.Zero) return;
+        EnableAcrylic(hwnd, tint);
+        RemoveWindowBorder(hwnd);
+        RoundCorners(hwnd, round: false);   // 关掉 DWM 圆角,交给 SetWindowRgn
+        RefreshRegion(window, hwnd, radiusDip);
+    }
+
+    /// <summary>窗口尺寸变化后重裁圆角(WPF 的 DPI 已由 CreateRoundRectRgn 的物理像素补偿)。</summary>
+    public static void RefreshRegion(Window window, IntPtr hwnd, int radiusDip)
+    {
+        if (hwnd == IntPtr.Zero) return;
+        var src = HwndSource.FromHwnd(hwnd);
+        double scale = src?.CompositionTarget?.TransformToDevice.M11 ?? 1.0;
+        int w = (int)Math.Round(window.ActualWidth * scale);
+        int h = (int)Math.Round(window.ActualHeight * scale);
+        SetRoundRegion(hwnd, w, h, (int)Math.Round(radiusDip * scale));
+    }
+
+    // ---------- 系统设置变更广播(切换深/浅色后通知所有窗口) ----------
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint msg, IntPtr wParam, string lParam,
+        uint flags, uint timeout, out IntPtr result);
+    public static readonly IntPtr HWND_BROADCAST = new(0xFFFF);
+    public const uint WM_SETTINGCHANGE = 0x001A;
+
+    public static void BroadcastSettingChange(string area)
+    {
+        SendMessageTimeout(HWND_BROADCAST, WM_SETTINGCHANGE, IntPtr.Zero, area, 2 /*SMTO_ABORTIFHUNG*/, 1500, out _);
+    }
+
     // ---------- 全局热键 ----------
     [DllImport("user32.dll")] public static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
     [DllImport("user32.dll")] public static extern bool UnregisterHotKey(IntPtr hWnd, int id);

@@ -63,6 +63,30 @@ public partial class StatusBarWindow : Window
         RefreshAppsRow();
     }
 
+    /// <summary>主题切换后重涂玻璃。</summary>
+    public void RepaintGlass()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero) return;
+        Native.EnableAcrylic(hwnd, AppTheme.GlassTint(AppTheme.IsDark, 0.78));
+        Native.DarkTitle(hwnd, AppTheme.IsDark);
+    }
+
+    /// <summary>某个模块要求状态栏保持显示(如控制中心展开时)。</summary>
+    public void RevealFor(string reason)
+    {
+        _revealReasons.Add(reason);
+        if (!_shown) SlideDown();
+        else _retractSince = null;
+    }
+
+    public void ReleaseReveal(string reason)
+    {
+        _revealReasons.Remove(reason);
+    }
+
+    private readonly System.Collections.Generic.HashSet<string> _revealReasons = new();
+
     // ---------------- 触顶呼出 / 离开收回 ----------------
 
     private void PollCursor()
@@ -82,6 +106,9 @@ public partial class StatusBarWindow : Window
             if (cy <= 4 && cx < excludeFrom) SlideDown();
             return;
         }
+
+        // 控制中心展开期间状态栏常显:鼠标从状态栏下移到面板时不能把状态栏收走
+        if (App.IsControlCenterOpen || _revealReasons.Count > 0) { _retractSince = null; return; }
 
         bool inside = cy >= Top - 6 && cy <= Top + Height + 24;   // 全宽,只看纵向
         if (inside) { _retractSince = null; return; }

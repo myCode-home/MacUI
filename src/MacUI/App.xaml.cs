@@ -128,14 +128,25 @@ public partial class App : Application
 
     // ---------------- 控制中心 ----------------
 
+    /// <summary>控制中心是否展开(状态栏据此常显,避免鼠标下移时状态栏被收回)。</summary>
+    public static bool IsControlCenterOpen { get; private set; }
+
+    public static void SetControlCenterOpen(bool open)
+    {
+        IsControlCenterOpen = open;
+        // 打开面板时确保状态栏在场:macOS 上控制中心不会把菜单栏顶掉
+        if (open) _statusBar?.RevealFor("控制中心");
+        else _statusBar?.ReleaseReveal("控制中心");
+    }
+
     public static void ToggleControlCenter()
     {
         if (_controlCenter == null)
         {
             _controlCenter = new ControlCenterWindow();
-            _controlCenter.Closed += (_, _) => _controlCenter = null;
-            _controlCenter.Show();
+            _controlCenter.Closed += (_, _) => { _controlCenter = null; SetControlCenterOpen(false); };
         }
+        _controlCenter.Show();
         _controlCenter.Toggle();
     }
 
@@ -252,16 +263,21 @@ public partial class App : Application
         _settings.Activate();
     }
 
-    /// <summary>主题切换后重涂 Spotlight 玻璃。</summary>
+    /// <summary>主题切换后重涂全部玻璃面板(Spotlight / 状态栏 / 控制中心)。</summary>
     public static void RefreshGlass()
     {
-        if (_spotlight == null) return;
-        try
+        if (_spotlight != null)
         {
-            var h = new WindowInteropHelper(_spotlight).Handle;
-            if (h != IntPtr.Zero) Native.EnableAcrylic(h, AppTheme.GlassTint(AppTheme.IsDark, 0.85));
+            try
+            {
+                var h = new WindowInteropHelper(_spotlight).Handle;
+                if (h != IntPtr.Zero) Native.EnableAcrylic(h, AppTheme.GlassTint(AppTheme.IsDark, 0.85));
+            }
+            catch { /* 忽略 */ }
         }
-        catch { /* 忽略 */ }
+
+        try { _statusBar?.RepaintGlass(); } catch { /* 忽略 */ }
+        try { _controlCenter?.RepaintGlass(); } catch { /* 忽略 */ }
     }
 
     public static void LogError(Exception ex)

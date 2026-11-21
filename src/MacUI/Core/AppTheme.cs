@@ -54,6 +54,23 @@ public static class AppTheme
         if (Application.Current != null) App.RefreshGlass();
     }
 
+    /// <summary>真正切换 Windows 系统深/浅色模式(注册表 + 广播 ImmersiveColorSet)。</summary>
+    public static void SetSystemLightMode(bool light)
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", writable: true);
+            if (key != null)
+            {
+                key.SetValue("AppsUseLightTheme", light ? 1 : 0, RegistryValueKind.DWord);
+                key.SetValue("SystemUsesLightTheme", light ? 1 : 0, RegistryValueKind.DWord);
+            }
+            Native.BroadcastSettingChange("ImmersiveColorSet");
+        }
+        catch { /* 尽力而为 */ }
+    }
+
     public static Color GlassTint(bool dark, double alphaScale = 1.0)
     {
         return dark
