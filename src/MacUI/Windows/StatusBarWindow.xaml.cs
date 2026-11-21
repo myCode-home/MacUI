@@ -161,7 +161,8 @@ public partial class StatusBarWindow : Window
     {
         if (!_shown) return;
         VolumeIcon.Text = "\uE767";
-        VolumeText.Text = $"{Audio.GetVolumePercent()}%";
+        int vol = Audio.GetVolumePercent();
+        VolumeText.Text = vol >= 0 ? $"{vol}%" : "--";
     }
 
     private void RefreshAppsRow()

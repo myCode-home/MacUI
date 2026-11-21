@@ -45,10 +45,12 @@
                            VerticalAlignment="Center" Margin="0,0,10,0"/>
                 <Button x:Name="CcBtn" Style="{StaticResource IconBtn}" Content="&#xE700;"
                         FontSize="13" VerticalAlignment="Center" Click="CcBtn_Click"
-                        ToolTip="控制中心"/>
+                        ToolTip="控制中心"
+                        AutomationProperties.Name="控制中心"/>
                 <Button x:Name="GearBtn" Style="{StaticResource IconBtn}" Content="&#xE713;"
                         FontSize="13" VerticalAlignment="Center" Click="Gear_Click"
-                        ToolTip="设置"/>
+                        ToolTip="设置"
+                        AutomationProperties.Name="设置"/>
             </StackPanel>
         </Grid>
     </Border>

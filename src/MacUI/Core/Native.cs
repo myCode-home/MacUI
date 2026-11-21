@@ -161,11 +161,7 @@ internal static class Native
     [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder sb, int max);
 
-    // ---------- 系统音量(winmm;导出名小写开头) ----------
-    [DllImport("winmm.dll", EntryPoint = "waveOutGetVolume")]
-    public static extern int WaveOutGetVolume(uint device, out uint volume);
-    [DllImport("winmm.dll", EntryPoint = "waveOutSetVolume")]
-    public static extern int WaveOutSetVolume(uint device, uint volume);
+    // 系统音量已改用 Core Audio(见 Core/Audio.cs);winmm waveOut 音量与真实主音量无关,不再使用
 
     /// <summary>前台窗口当前输入法:简体中文返回 "中",否则返回 "EN"。</summary>
     public static string GetForegroundIme()

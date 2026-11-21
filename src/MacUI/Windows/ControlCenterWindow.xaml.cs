@@ -41,9 +41,7 @@ public partial class ControlCenterWindow : Window
             int v = (int)VolSlider.Value;
             VolText.Text = v + "%";
             if (_initVolume) return;
-            uint raw = (uint)(v / 100.0 * 65535);
-            uint both = (raw << 16) | raw;
-            Native.WaveOutSetVolume(0xFFFFFFFF, both);
+            Audio.SetVolumePercent(v);   // 真正的系统主音量(IAudioEndpointVolume)
         };
         ThemeBtn.Click += (_, _) =>
         {
