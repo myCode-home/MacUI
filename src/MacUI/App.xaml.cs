@@ -192,7 +192,7 @@ public partial class App : Application
     {
         _tray = new WinForms.NotifyIcon
         {
-            Icon = System.Drawing.SystemIcons.Application,
+            Icon = LoadAppIcon(),
             Text = "MacUI — Spotlight 搜索 (" + HotkeyHelper.Normalize(Cfg!.Hotkey) + ")",
             Visible = true,
         };
@@ -230,6 +230,19 @@ public partial class App : Application
 
         _tray.ContextMenuStrip = menu;
         _tray.DoubleClick += (_, _) => ShowSettings();
+    }
+
+    /// <summary>托盘图标:优先用打包进程序的 app.ico,失败回退系统图标。</summary>
+    private static System.Drawing.Icon LoadAppIcon()
+    {
+        try
+        {
+            var res = GetResourceStream(new Uri("pack://application:,,,/app.ico"));
+            if (res?.Stream != null)
+                return new System.Drawing.Icon(res.Stream);
+        }
+        catch { /* 忽略 */ }
+        return System.Drawing.SystemIcons.Application;
     }
 
     private static WinForms.ToolStripMenuItem TrayCheck(string text, bool @checked, Action onClick)
