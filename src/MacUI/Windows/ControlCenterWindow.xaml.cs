@@ -115,12 +115,14 @@ public partial class ControlCenterWindow : Window
         if (h > 40) _contentH = h;
     }
 
-    /// <summary>重涂玻璃(主题切换后调用)。经典 Acrylic 模糊:支持 SetWindowRgn 裁切,
-    /// 缩放动画时玻璃会跟着窗口区域一起收缩(DWM 系统背景材质不认 region,已弃用)。</summary>
+    /// <summary>重涂玻璃(主题切换后调用)。
+    /// 用纯模糊(不带系统 tint):Win11 上 Acrylic(4) 会忽略自定义 tint 只给固定灰白材质,
+    /// 浅色模式因此变成一块不透明白板。纯 blur(3) 是真正透明的模糊,
+    /// 颜色由 XAML 的 PanelBgBrush(半透明底色)控制 —— 两种主题都能透出壁纸。</summary>
     public void RepaintGlass()
     {
         if (_hwnd == IntPtr.Zero) return;
-        Native.EnableAcrylic(_hwnd, AppTheme.GlassTint(AppTheme.IsDark, 0.50));
+        Native.EnablePlainBlur(_hwnd);
         Native.RemoveWindowBorder(_hwnd);
         Native.RoundCorners(_hwnd, round: false);
         ApplyVisual(1.0, 0);

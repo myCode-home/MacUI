@@ -30,15 +30,27 @@ internal static class Native
     private static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WindowCompositionAttributeData data);
 
     private const int WCA_ACCENT_POLICY = 19;
-    private const uint ACCENT_ENABLE_ACRYLICBLURBEHIND = 4;
+    private const uint ACCENT_ENABLE_BLURBEHIND = 3;          // 纯模糊(无 tint,颜色由 WPF 层控制)
+    private const uint ACCENT_ENABLE_ACRYLICBLURBEHIND = 4;   // 带 tint 的 Acrylic
 
     /// <summary>给无边框窗口开启系统级 Acrylic 毛玻璃(带色调)。</summary>
     public static void EnableAcrylic(IntPtr hwnd, Color tint)
+        => SetAccent(hwnd, ACCENT_ENABLE_ACRYLICBLURBEHIND, tint, 2);
+
+    /// <summary>
+    /// 只做背景模糊、不加系统 tint。Win11 上 Acrylic(4) 会被系统按主题染成
+    /// 灰白/灰黑,自定义透明度几乎不起作用;纯 blur(3) 则真实透出壁纸颜色,
+    /// 再由 WPF 层的半透明底色控制观感 —— iOS 观感就用这条路径。
+    /// </summary>
+    public static void EnablePlainBlur(IntPtr hwnd)
+        => SetAccent(hwnd, ACCENT_ENABLE_BLURBEHIND, Colors.Transparent, 0);
+
+    private static void SetAccent(IntPtr hwnd, uint state, Color tint, uint flags)
     {
         var accent = new AccentPolicy
         {
-            AccentState = ACCENT_ENABLE_ACRYLICBLURBEHIND,
-            AccentFlags = 2,
+            AccentState = state,
+            AccentFlags = flags,
             // DWORD 格式为 0xAABBGGRR
             GradientColor = (uint)(tint.A << 24 | tint.B << 16 | tint.G << 8 | tint.R),
         };

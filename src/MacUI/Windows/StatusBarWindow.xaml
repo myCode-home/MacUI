@@ -11,7 +11,7 @@
                       CornerRadius="0" UseAeroCaptionButtons="False"/>
     </WindowChrome.WindowChrome>
 
-    <Border x:Name="Root" Padding="12,0">
+    <Border x:Name="Root" Padding="12,0" Background="{DynamicResource PanelBgBrush}">
         <Grid>
             <!-- 左侧:输入法 + 运行中应用图标 -->
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">

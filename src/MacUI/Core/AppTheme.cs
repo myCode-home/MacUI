@@ -75,6 +75,6 @@ public static class AppTheme
     {
         return dark
             ? Color.FromArgb((byte)Math.Clamp(0xC4 * alphaScale, 0, 255), 0x20, 0x22, 0x28)   // 深色玻璃
-            : Color.FromArgb((byte)Math.Clamp(0xD6 * alphaScale, 0, 255), 0xF6, 0xF6, 0xF8);  // 浅色玻璃
+            : Color.FromArgb((byte)Math.Clamp(0xF0 * alphaScale, 0, 255), 0xFF, 0xFF, 0xFF);  // 浅色玻璃(纯白低透明)
     }
 }

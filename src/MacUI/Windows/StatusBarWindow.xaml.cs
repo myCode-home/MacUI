@@ -47,7 +47,8 @@ public partial class StatusBarWindow : Window
     {
         var hwnd = new WindowInteropHelper(this).Handle;
         _dpi = (HwndSource.FromHwnd(hwnd)?.CompositionTarget?.TransformToDevice.M11) ?? 1.0;
-        Native.EnableAcrylic(hwnd, AppTheme.GlassTint(AppTheme.IsDark, 0.78));
+        // 纯模糊 + XAML 半透明底色:浅色模式下真正透出壁纸(与控制中心一致)
+        Native.EnablePlainBlur(hwnd);
         Native.DarkTitle(hwnd, AppTheme.IsDark);
         Native.MakeNoActivate(hwnd);
 
@@ -68,7 +69,7 @@ public partial class StatusBarWindow : Window
     {
         var hwnd = new WindowInteropHelper(this).Handle;
         if (hwnd == IntPtr.Zero) return;
-        Native.EnableAcrylic(hwnd, AppTheme.GlassTint(AppTheme.IsDark, 0.78));
+        Native.EnablePlainBlur(hwnd);
         Native.DarkTitle(hwnd, AppTheme.IsDark);
     }
 
