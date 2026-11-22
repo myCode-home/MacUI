@@ -14,7 +14,8 @@
     <SolidColorBrush x:Key="CardBgBrush" Color="#F2F4F4F6"/>
     <SolidColorBrush x:Key="CardBorderBrush" Color="#22000000"/>
     <SolidColorBrush x:Key="SwitcherBgBrush" Color="#1A141414"/>
-    <!-- 控制中心/面板底:浅色玻璃 -->
-    <SolidColorBrush x:Key="PanelBgBrush" Color="#5EF2F2F7"/>
+    <!-- 控制中心/面板底:浅色 iOS 磨砂 -->
+    <SolidColorBrush x:Key="PanelBgBrush" Color="#33F2F2F7"/>
+    <SolidColorBrush x:Key="PanelBorderBrush" Color="#30000000"/>
     <SolidColorBrush x:Key="SwitcherBorderBrush" Color="#22FFFFFF"/>
 </ResourceDictionary>

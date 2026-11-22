@@ -1,33 +1,51 @@
 using System;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
-using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using MacUI.Core;
 
 namespace MacUI.Windows;
 
 /// <summary>
-/// 控制中心:从状态栏按钮呼出的单层圆角毛玻璃面板。
-/// 内容:时钟 / 音量滑条(真实主音量)/ 系统深浅色切换 / 网络设置入口 / 显示桌面 / 电量。
-/// 鼠标离开面板且不在状态栏上时自动收回;不抢焦点、不影响任何操作。
+/// 控制中心:iOS 风格单层圆角磨砂面板,从状态栏下方「飞出 + 缩放」展开。
+/// 内容:时钟 / 音量滑条(真实主音量,点击定位)/ 系统深浅色 / 网络设置 / 显示桌面 / 电量。
+/// 鼠标移出 0.3 秒自动收回;面板展开期间状态栏保持可见。
+///
+/// 动画用手动逐帧驱动而不是 WPF 属性动画:实测 Window.Height 的 BeginAnimation
+/// 在 WindowChrome 窗口上不生效(只有 Width/Left/Top 动),逐帧 Set 尺寸 100% 可靠。
 /// </summary>
 public partial class ControlCenterWindow : Window
 {
-    private const int RadiusDip = 22;       // 面板圆角(窗口区域裁切)
-    private const double PanelRight = 10;   // 距屏幕右缘
+    private const int RadiusDip = 24;          // 面板圆角(窗口区域裁切)
+    private const double ContentWidth = 340;   // 内容基准宽度(Viewbox 缩放的基准)
+    private const double PanelRight = 10;      // 距屏幕右缘
+    private const double TopTarget = 38;       // 状态栏(30 DIP)下方留 8
+    private const double OpenScale = 0.88;     // 展开起始缩放
+    private const double CloseScale = 0.90;    // 收起终止缩放
+    private const double FlyOffset = 56;       // 从顶部飞出的起始偏移(DIP)
 
     private readonly DispatcherTimer _clockTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly DispatcherTimer _netTimer = new() { Interval = TimeSpan.FromSeconds(3) };
     private readonly DispatcherTimer _batteryTimer = new() { Interval = TimeSpan.FromSeconds(5) };
-    private readonly DispatcherTimer _dismissPoll = new() { Interval = TimeSpan.FromMilliseconds(250) };
+    private readonly DispatcherTimer _dismissPoll = new() { Interval = TimeSpan.FromMilliseconds(50) };
     private double _dpi = 1.0;
     private bool _isOut;
     private bool _initVolume;
     private DateTime? _outsideSince;
     private IntPtr _hwnd;
+    private double _contentH;
+
+    // ---- 手动动画状态 ----
+    private readonly Stopwatch _animClock = new();
+    private bool _animating;
+    private bool _opening;
+    private double _animMs = 1;
+    private double _startScale = 1;
+    private double _currentScale = 1;
+    private bool _renderHooked;
 
     /// <summary>面板是否已展开(状态栏据此避免悬停收回竞态)。</summary>
     public bool IsOut => _isOut;
@@ -35,6 +53,15 @@ public partial class ControlCenterWindow : Window
     public ControlCenterWindow()
     {
         InitializeComponent();
+
+        // 先量出内容高度:窗口尺寸动画需要确定的基准尺寸
+        Root.Measure(new Size(ContentWidth, double.PositiveInfinity));
+        _contentH = Math.Ceiling(Root.DesiredSize.Height);
+        // 不设 WPF Width/Height:尺寸完全由原生 SetWindowPos 控制,
+        // 否则布局回合同步会把窗口尺寸拉回 WPF 值,导致动画抖动
+        Width = double.NaN;
+        Height = double.NaN;
+
         UpdateClock();
         UpdateBattery();
         UpdateNet();
@@ -52,9 +79,9 @@ public partial class ControlCenterWindow : Window
             Audio.SetVolumePercent(v);   // 真实系统主音量(IAudioEndpointVolume)
         };
 
-        // 初始:藏在状态栏后方(屏幕外)
-        Left = SystemParameters.PrimaryScreenWidth - Width - PanelRight;
-        Top = -900;
+        // 初始:完整尺寸,但藏在屏幕上方(不可见)
+        Left = SystemParameters.PrimaryScreenWidth - ContentWidth - PanelRight;
+        Top = -_contentH - 80;
 
         _clockTimer.Start();
         _netTimer.Start();
@@ -69,12 +96,9 @@ public partial class ControlCenterWindow : Window
         _dpi = (HwndSource.FromHwnd(_hwnd)?.CompositionTarget?.TransformToDevice.M11) ?? 1.0;
         Native.MakeNoActivate(_hwnd);
         RepaintGlass();
-        // 内容高度由 SizeToContent 决定,量到真实高度后重裁圆角
-        SizeChanged += (_, _) =>
-        {
-            Native.RefreshRegion(this, _hwnd, RadiusDip);
-            UpdateBattery();
-        };
+        // 字体/DPI 在 Loaded 后才最终确定:重新量一次内容高度,避免内容被纵向压扁
+        RemeasureContent();
+        ApplyVisual(1.0, 0);
 
         _initVolume = true;
         int vol = Audio.GetVolumePercent();
@@ -83,70 +107,172 @@ public partial class ControlCenterWindow : Window
         _initVolume = false;
     }
 
-    /// <summary>重涂玻璃(主题切换后调用)。圆角靠 SetWindowRgn 裁切,避免双层边框。</summary>
+    /// <summary>重新测量内容自然高度(窗口固定高度 + 内容缩放动画的基准)。</summary>
+    private void RemeasureContent()
+    {
+        Root.Measure(new Size(ContentWidth, double.PositiveInfinity));
+        double h = Math.Ceiling(Root.DesiredSize.Height);
+        if (h > 40) _contentH = h;
+    }
+
+    /// <summary>重涂玻璃(主题切换后调用)。经典 Acrylic 模糊:支持 SetWindowRgn 裁切,
+    /// 缩放动画时玻璃会跟着窗口区域一起收缩(DWM 系统背景材质不认 region,已弃用)。</summary>
     public void RepaintGlass()
     {
         if (_hwnd == IntPtr.Zero) return;
-        Native.ApplyGlassPanel(this, AppTheme.GlassTint(AppTheme.IsDark, 0.92), RadiusDip);
+        Native.EnableAcrylic(_hwnd, AppTheme.GlassTint(AppTheme.IsDark, 0.50));
+        Native.RemoveWindowBorder(_hwnd);
+        Native.RoundCorners(_hwnd, round: false);
+        ApplyVisual(1.0, 0);
     }
 
-    // ---------------- 滑出 / 收回 ----------------
+    // ---------------- 飞出 + 缩放动画 ----------------
+
+    /// <summary>
+    /// 应用一帧视觉状态:原生 SetWindowPos 改窗口真实尺寸(右上缘锚定),Viewbox 等比缩放内容。
+    /// DWM 磨砂跟随窗口矩形,所以玻璃必然跟着缩放。
+    /// </summary>
+    private void ApplyVisual(double s, double topOffset = 0)
+    {
+        _currentScale = s;
+        if (_hwnd == IntPtr.Zero) return;
+        double dpi = _dpi > 0 ? _dpi : 1.0;
+        double wDip = ContentWidth * s;
+        double hDip = _contentH * s;
+        double leftDip = SystemParameters.PrimaryScreenWidth - wDip - PanelRight;
+        double topDip = TopTarget + topOffset;
+
+        int wPx = Math.Max(8, (int)Math.Round(wDip * dpi));
+        int hPx = Math.Max(8, (int)Math.Round(hDip * dpi));
+        int xPx = (int)Math.Round(leftDip * dpi);
+        int yPx = (int)Math.Round(topDip * dpi);
+
+        Native.SetWindowPos(_hwnd, Native.HWND_TOPMOST, xPx, yPx, wPx, hPx,
+            Native.SWP_NOACTIVATE | Native.SWP_NOZORDER);
+        int rPx = Math.Max(4, (int)Math.Round(RadiusDip * s * dpi));
+        Native.SetRoundRegion(_hwnd, wPx, hPx, rPx);
+    }
 
     public void SlideOut()
     {
         if (_isOut) { SlideIn(); return; }
+        if (_animating && _opening) return;
+
         _isOut = true;
+        bool interrupted = _animating;
+        if (!interrupted) RemeasureContent();
+
         Show();
         Visibility = Visibility.Visible;
         Topmost = true;
-        UpdateLayout();   // SizeToContent:先量出真实高度,再算滑入起点
 
-        Left = SystemParameters.PrimaryScreenWidth - Width - PanelRight;
-        double h = ActualHeight > 0 ? ActualHeight : 380;
-        double from = 30 - h;                  // 从状态栏后方滑出
-        double target = 30 + 8;                // 状态栏(30 DIP)下方留 8
-        Top = from;
-        var anim = new DoubleAnimation(from, target, TimeSpan.FromMilliseconds(260))
-        {
-            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
-        };
-        BeginAnimation(TopProperty, anim);
+        double startScale = OpenScale;
+        ApplyVisual(startScale, -FlyOffset * (interrupted ? 1 : 1));
 
-        // 通知状态栏:面板展开期间它必须保持可见
         App.SetControlCenterOpen(true);
         _outsideSince = null;
         _dismissPoll.Start();
+
+        _startScale = startScale;
+        _opening = true;
+        _animMs = 380;
+        _animClock.Restart();
+        _animating = true;
+        if (!_renderHooked) { CompositionTarget.Rendering += OnFrame; _renderHooked = true; }
     }
 
     public void SlideIn()
     {
         if (!_isOut) return;
+        if (_animating && !_opening) return;
+
         _isOut = false;
         _dismissPoll.Stop();
         App.SetControlCenterOpen(false);
-        var anim = new DoubleAnimation(-ActualHeight - 24, TimeSpan.FromMilliseconds(200))
-        {
-            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn },
-        };
-        anim.Completed += (_, _) => { if (!_isOut) Hide(); };
-        BeginAnimation(TopProperty, anim);
+
+        _startScale = _currentScale;
+        _opening = false;
+        _animMs = 150;
+        _animClock.Restart();
+        _animating = true;
+        if (!_renderHooked) { CompositionTarget.Rendering += OnFrame; _renderHooked = true; }
     }
 
     public void Toggle() { if (_isOut) SlideIn(); else SlideOut(); }
+
+    private void OnFrame(object? sender, EventArgs e)
+    {
+        if (!_animating) { UnhookFrames(); return; }
+
+        double t = Math.Clamp(_animClock.Elapsed.TotalMilliseconds / _animMs, 0, 1);
+
+        if (_opening)
+        {
+            // 缩放:0.88 → 1(轻微回弹);同时从顶部滑入
+            double s = _startScale + (1 - _startScale) * EaseOutBack(t, 1.05);
+            double topOff = -FlyOffset * (1 - EaseOutCubic(t));
+            ApplyVisual(s, topOff);
+
+            if (t >= 1)
+            {
+                ApplyVisual(1.0, 0);
+                _animating = false;
+                UnhookFrames();
+            }
+        }
+        else
+        {
+            // 收起:缩到 0.9 + 上移 + 结束隐藏
+            double s = _startScale - (_startScale - CloseScale) * EaseInCubic(t);
+            double topOff = -40 * EaseInCubic(t);
+            ApplyVisual(s, topOff);
+
+            if (t >= 1)
+            {
+                _animating = false;
+                UnhookFrames();
+                Hide();
+                ApplyVisual(1.0, 0);   // 复位,下次展开从干净状态开始
+            }
+        }
+    }
+
+    private void UnhookFrames()
+    {
+        if (!_renderHooked) return;
+        CompositionTarget.Rendering -= OnFrame;
+        _renderHooked = false;
+    }
+
+    private static double EaseOutCubic(double t) => 1 - Math.Pow(1 - t, 3);
+
+    private static double EaseInCubic(double t) => t * t * t;
+
+    /// <summary>轻微回弹缓动:结束时略超过 1 再回落(c1 控制回弹幅度)。</summary>
+    private static double EaseOutBack(double t, double c1)
+    {
+        double c3 = c1 + 1;
+        double u = t - 1;
+        return 1 + c3 * u * u * u + c1 * u * u;
+    }
 
     private void PollDismiss()
     {
         if (!_isOut) return;
         if (!Native.GetCursorPos(out var p)) return;
+        if (!Native.GetWindowRect(_hwnd, out var r)) return;
+
+        // 全部用物理像素比较:鼠标位置与窗口矩形同坐标系
+        bool inside = p.X >= r.Left - 12 && p.X <= r.Right + 12
+                   && p.Y >= r.Top - 12 && p.Y <= r.Bottom + 12;
+        // 鼠标回到顶部状态栏也算"仍在使用"
         double dpi = _dpi > 0 ? _dpi : 1.0;
-        double cx = p.X / dpi, cy = p.Y / dpi;
-        bool inside = cx >= Left - 8 && cx <= Left + Width + 8
-                   && cy >= Top - 8 && cy <= Top + ActualHeight + 8;
-        // 鼠标回到顶部状态栏也算"仍在使用"(状态栏本身由它自己管理收回)
+        double cy = p.Y / dpi;
         bool onBar = cy >= 0 && cy <= 32;
         if (inside || onBar) { _outsideSince = null; return; }
         _outsideSince ??= DateTime.UtcNow;
-        if ((DateTime.UtcNow - _outsideSince.Value).TotalMilliseconds > 900) SlideIn();
+        // 用户要求:移出 0.3 秒即收起
+        if ((DateTime.UtcNow - _outsideSince.Value).TotalMilliseconds > 300) SlideIn();
     }
 
     // ---------------- 内容 ----------------
@@ -189,9 +315,9 @@ public partial class ControlCenterWindow : Window
             ? new SolidColorBrush(Color.FromRgb(0xFF, 0x45, 0x3A))
             : (Brush)FindResource("SysGreen");
 
-        // 满电时进度条铺满整行(之前末尾固定留 10px 空隙)
+        // 满电时进度条铺满整行
         double w = BatFrame.ActualWidth;
-        if (w <= 0) { w = Math.Max(0, Width - 2 * 15 - 2 * 4 - 2 * 13 - (ActualWidth > 0 ? 0 : 0)); }
+        if (w <= 0) w = ContentWidth - 2 * 15 - 2 * 4 - 2 * 13;
         BatBar.Width = Math.Max(0, w * b.Percent / 100.0);
     }
 
@@ -213,7 +339,6 @@ public partial class ControlCenterWindow : Window
 
     private void NetTile_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        // Windows 11 网络适配器页(旧版回落到网络状态页)
         App.ShellOpen("ms-settings:network-advancedsettings");
     }
 

@@ -8,8 +8,8 @@
 |---|---|---|
 | **Spotlight 搜索** | `Ctrl+Space`(可改键) | 居中毛玻璃面板,模糊搜索开始菜单应用(.lnk),↑↓ 选择、回车启动、Esc 关闭 |
 | **前台调度** | `Ctrl+Tab`(Shift+Tab / ←→ 反向) | 居中低透明度深色 frost 应用条(按 Z 序=最近使用排序);鼠标悬停也可选中;**松开 Ctrl 即切换**;Esc 取消 |
-| **触顶状态栏** | 鼠标顶到屏幕上缘 | 全宽毛玻璃菜单栏滑出:输入法(中/EN)+ 运行中应用图标(单击切换)+ WiFi + 音量 + 电量 + 时间 + 控制中心 + 设置;鼠标离开自动收回 |
-| **控制中心** | 点状态栏三条横线按钮 | 单层 22px 圆角毛玻璃面板:时钟 / 音量滑条(真实系统主音量,点击轨道即定位)/ 系统深色浅色切换 / 网络适配器设置入口 / 显示桌面 / 电量。面板展开期间状态栏常显,点击外部收回 |
+| **触顶状态栏** | 鼠标顶到屏幕上缘 | 全宽毛玻璃菜单栏滑出:输入法(中/EN)+ 运行中应用图标(单击切换)+ WiFi + 音量 + 电量 + 时间 + 控制中心 + 设置;鼠标离开 0.3 秒自动收回 |
+| **控制中心** | 点状态栏三条横线按钮 | iOS 风格 24px 圆角磨砂面板,从顶部「飞出 + 缩放」展开:时钟 / 音量滑条(真实系统主音量,点击轨道即定位)/ 系统深色浅色切换 / 网络适配器设置入口 / 显示桌面 / 电量。面板展开期间状态栏常显,鼠标移出 0.3 秒收回 |
 
 托盘图标:设置 / 功能开关 / 开机自启 / 退出。
 
@@ -48,4 +48,5 @@ dotnet run --project src/MacUI -- -c Release   # 或直接运行 bin/Release/net
 - 前台调度支持鼠标悬停选中、左右方向键、Shift+Tab 三种选择方式
 - **控制中心单层圆角**:毛玻璃需要 `AllowsTransparency=False`(否则 Acrylic 失效),此时 XAML 的 `CornerRadius` 裁不了窗形,会露出 DWM 自带的 8px 圆角形成"双边框"。解法是 `SetWindowRgn` + `CreateRoundRectRgn` 按物理像素裁出 22 DIP 圆角,并关掉 `DWMWA_WINDOW_CORNER_PREFERENCE`,同时用 `DWMWA_BORDER_COLOR = DWMWA_COLOR_NONE` 去掉外描边
 - **系统深浅色切换**写 `HKCU\...\Themes\Personalize` 的 `AppsUseLightTheme` / `SystemUsesLightTheme` 并广播 `WM_SETTINGCHANGE("ImmersiveColorSet")`,系统所有应用随之切换
+- **展开/收起动画**用原生 `SetWindowPos` 逐帧改窗口真实尺寸(右上缘锚定)+ Viewbox 等比缩放内容,不依赖 WPF 的 `Window.Width/Height` 属性动画 —— 实测在 `WindowChrome` 窗口上逐帧设置这两个属性会被系统/布局回吞,导致动画卡住;每帧同步 `SetWindowRgn` 让 24px 圆角始终贴合窗口
 - 控制中心展开时通过 `App.SetControlCenterOpen` → `StatusBarWindow.RevealFor` 登记"常显理由",状态栏的自动收回逻辑据此豁免,避免鼠标从状态栏下移到面板时菜单栏被收走

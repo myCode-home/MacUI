@@ -84,11 +84,15 @@ internal static class Native
     /// 这里用 SetWindowRgn 裁出与内层一致的圆角,外圈彻底消失。
     /// </summary>
     public static void SetRoundRegion(IntPtr hwnd, int widthPx, int heightPx, int radiusPx)
+        => SetRoundRegionAt(hwnd, 0, 0, widthPx, heightPx, radiusPx);
+
+    /// <summary>同 <see cref="SetRoundRegion"/>,但可指定区域在窗口内的偏移(用于右侧锚定的缩放动画)。</summary>
+    public static void SetRoundRegionAt(IntPtr hwnd, int x, int y, int widthPx, int heightPx, int radiusPx)
     {
         if (widthPx <= 0 || heightPx <= 0) return;
         int d = Math.Max(0, radiusPx) * 2;
         // +1:CreateRoundRectRgn 的 right/bottom 是开区间,不加 1 会缺最右/最下一像素
-        IntPtr rgn = CreateRoundRectRgn(0, 0, widthPx + 1, heightPx + 1, d, d);
+        IntPtr rgn = CreateRoundRectRgn(x, y, x + widthPx + 1, y + heightPx + 1, d, d);
         if (rgn == IntPtr.Zero) return;
         SetWindowRgn(hwnd, rgn, true);   // 成功后区域所有权移交系统,不要再 DeleteObject
     }
@@ -258,6 +262,7 @@ internal static class Native
 
     // 钉到桌面层(所有应用窗口之下、壁纸之上),对应 Rainmeter「桌面层」/ Windows 小工具
     public static readonly IntPtr HWND_BOTTOM = new(1);
+    public static readonly IntPtr HWND_TOPMOST = new(-1);
     public const uint SWP_NOSIZE = 0x1;
     public const uint SWP_NOMOVE = 0x2;
     public const uint SWP_NOZORDER = 0x4;

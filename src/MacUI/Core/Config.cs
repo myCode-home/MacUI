@@ -13,7 +13,7 @@ public class AppConfig
     public bool SwitcherEnabled { get; set; } = true;    // Ctrl+Tab 前台调度
     public string SwitcherHotkey { get; set; } = "Ctrl+Tab";
     public bool StatusBarEnabled { get; set; } = true;   // 顶部状态栏(触顶呼出)
-    public int StatusBarAutoHideDelay { get; set; } = 600; // 鼠标离开后自动收回的延迟(毫秒)
+    public int StatusBarAutoHideDelay { get; set; } = 300; // 鼠标离开后自动收回的延迟(毫秒)
     public string Theme { get; set; } = "system";        // system | dark | light
     public bool StartWithWindows { get; set; } = false;
     public bool? TaskbarOriginalAutoHide { get; set; }   // 旧版本遗留字段,仅用于清理

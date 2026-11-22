@@ -22,7 +22,7 @@ public partial class StatusBarWindow : Window
     private readonly DispatcherTimer _clockTimer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly DispatcherTimer _slowTimer = new() { Interval = TimeSpan.FromSeconds(10) };
     private readonly DispatcherTimer _appsTimer = new() { Interval = TimeSpan.FromSeconds(2) };
-    private readonly DispatcherTimer _pollTimer = new() { Interval = TimeSpan.FromMilliseconds(150) };
+    private readonly DispatcherTimer _pollTimer = new() { Interval = TimeSpan.FromMilliseconds(80) };
     private double _dpi = 1.0;
     private bool _shown;
     private DateTime? _retractSince;
